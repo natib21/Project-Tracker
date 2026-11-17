@@ -13,6 +13,7 @@ import { MembershipsModule } from './modules/memberships/memberships.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: join(__dirname, '..', '..', '..', '.env'),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

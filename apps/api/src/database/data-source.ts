@@ -2,8 +2,9 @@ import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 import { join } from 'path';
 
-// Load environment variables
-config();
+// Load environment variables from workspace root
+// In production, real environment variables take precedence
+config({ path: join(__dirname, '..', '..', '..', '..', '.env') });
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
