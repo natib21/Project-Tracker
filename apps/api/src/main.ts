@@ -9,6 +9,11 @@ async function bootstrap() {
   // Global prefix for API routes
   app.setGlobalPrefix('api');
 
+  // Trust proxy for secure cookies behind reverse proxy
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   // Validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -30,8 +35,8 @@ async function bootstrap() {
   }
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`Application is running on: http://0.0.0.0:${port}`);
 }
 
 bootstrap();
