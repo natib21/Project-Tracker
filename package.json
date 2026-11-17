@@ -1,0 +1,18 @@
+{
+  "name": "project-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
+    "test": "npm run test --workspace=apps/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "migration:generate": "npm run migration:generate --workspace=apps/api",
+    "migration:run": "npm run migration:run --workspace=apps/api",
+    "migration:revert": "npm run migration:revert --workspace=apps/api"
+  }
+}
