@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // Trust proxy for secure cookies behind reverse proxy
   if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1);
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
   }
 
   // Validation pipe
