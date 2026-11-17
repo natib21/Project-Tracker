@@ -7,13 +7,9 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from './user.entity';
-import { Organization } from './organization.entity';
-
-export enum MembershipRole {
-  ADMIN = 'admin',
-  MEMBER = 'member',
-}
+import { User } from '../../users/entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
+import { MembershipRole } from '../role.enum';
 
 @Entity('memberships')
 export class Membership {
@@ -27,14 +23,14 @@ export class Membership {
   })
   role: MembershipRole;
 
-  @ManyToOne(() => User, (user) => user.memberships, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
 
   @Column()
   userId: string;
 
-  @ManyToOne(() => Organization, (organization) => organization.memberships, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organizationId' })
   organization: Organization;
 

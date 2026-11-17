@@ -3,11 +3,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { AuthModule } from './auth/auth.module';
-import { HealthController } from './health/health.controller';
-import { User } from './entities/user.entity';
-import { Organization } from './entities/organization.entity';
-import { Membership } from './entities/membership.entity';
+import { AuthModule } from './modules/auth/auth.module';
+import { HealthModule } from './modules/health/health.module';
+import { UsersModule } from './modules/users/users.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { MembershipsModule } from './modules/memberships/memberships.module';
 
 @Module({
   imports: [
@@ -22,7 +22,7 @@ import { Membership } from './entities/membership.entity';
         ssl: configService.get<string>('DATABASE_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         synchronize: false,
         logging: configService.get<string>('NODE_ENV') === 'development',
-        entities: [User, Organization, Membership],
+        entities: [join(__dirname, 'modules', '**', 'entities', '*.entity{.ts,.js}')],
         migrations: [join(__dirname, 'database', 'migrations', '*{.ts,.js}')],
       }),
       inject: [ConfigService],
@@ -32,8 +32,11 @@ import { Membership } from './entities/membership.entity';
       exclude: ['/api*'],
       serveRoot: '/',
     }),
+    UsersModule,
+    OrganizationsModule,
+    MembershipsModule,
     AuthModule,
+    HealthModule,
   ],
-  controllers: [HealthController],
 })
 export class AppModule {}
