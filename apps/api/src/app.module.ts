@@ -13,7 +13,10 @@ import { MembershipsModule } from './modules/memberships/memberships.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: join(__dirname, '..', '..', '..', '.env'),
+      envFilePath: [
+  join(process.cwd(), '.env'),
+  join(process.cwd(), '..', '..', '.env'),
+],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -22,7 +25,7 @@ import { MembershipsModule } from './modules/memberships/memberships.module';
         url: configService.get<string>('DATABASE_URL'),
         ssl: configService.get<string>('DATABASE_SSL') === 'true' ? { rejectUnauthorized: false } : false,
         synchronize: false,
-        logging: configService.get<string>('NODE_ENV') === 'development',
+       logging: configService.get<string>('LOG_SQL') === 'true',
         entities: [join(__dirname, 'modules', '**', 'entities', '*.entity{.ts,.js}')],
         migrations: [join(__dirname, 'database', 'migrations', '*{.ts,.js}')],
       }),

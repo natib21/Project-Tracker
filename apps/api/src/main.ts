@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
@@ -35,8 +35,19 @@ async function bootstrap() {
   }
 
   const port = process.env.PORT || 3000;
+
+    const httpLogger = new Logger('HTTP');
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    httpLogger.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - start}ms`);
+  });
+  next();
+});
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://0.0.0.0:${port}`);
+
+
 }
 
 bootstrap();
