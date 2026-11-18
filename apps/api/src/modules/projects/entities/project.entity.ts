@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
@@ -29,6 +30,9 @@ export class Project {
 
   @Column('decimal', { precision: 14, scale: 2 })
   budget: number;
+
+  @OneToMany('Task', 'project')
+  tasks: any[];
 
   @CreateDateColumn()
   createdAt: Date;
