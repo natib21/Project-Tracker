@@ -31,11 +31,10 @@ import { MembershipsModule } from './modules/memberships/memberships.module';
       }),
       inject: [ConfigService],
     }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
-      exclude: ['/api*'],
-      serveRoot: '/',
-    }),
+   ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', '..', 'public'),
+  exclude: ['/api/{*path}'],
+}),
     UsersModule,
     OrganizationsModule,
     MembershipsModule,
