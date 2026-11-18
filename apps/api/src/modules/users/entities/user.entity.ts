@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { Membership } from '../../memberships/entities/membership.entity';
 
 @Entity('users')
 export class User {
@@ -22,6 +24,9 @@ export class User {
 
   @Column()
   lastName: string;
+
+  @OneToMany(() => Membership, (membership) => membership.user)
+  memberships: Membership[];
 
   @CreateDateColumn()
   createdAt: Date;
