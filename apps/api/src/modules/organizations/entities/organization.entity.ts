@@ -22,6 +22,9 @@ export class Organization {
   @OneToMany(() => Membership, (membership) => membership.organization)
   memberships: Membership[];
 
+  @OneToMany('Project', 'organizationId')
+  projects: any[];
+
   @CreateDateColumn()
   createdAt: Date;
 

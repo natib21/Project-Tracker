@@ -41,12 +41,22 @@ export class OrganizationsService {
         'membership.userId = :userId',
         { userId },
       )
+      .leftJoin('organization.memberships', 'allMemberships')
+      .leftJoin('organization.projects', 'projects')
       .addSelect('membership.role', 'role')
+      .addSelect('COUNT(DISTINCT allMemberships.id)', 'memberCount')
+      .addSelect('COUNT(DISTINCT projects.id)', 'projectCount')
+      .groupBy('organization.id')
+      .addGroupBy('membership.role')
       .getRawAndEntities();
 
     return result.entities.map((org, index) => ({
       ...org,
       role: result.raw[index].role,
+      _count: {
+        memberships: parseInt(result.raw[index].memberCount) || 0,
+        projects: parseInt(result.raw[index].projectCount) || 0,
+      },
     }));
   }
 

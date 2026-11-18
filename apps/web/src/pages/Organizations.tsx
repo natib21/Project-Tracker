@@ -59,10 +59,11 @@ export function Organizations() {
     setSubmitting(true);
 
     try {
-      const newOrg = await api.post('/api/organizations', formData);
-      setOrganizations([...organizations, newOrg]);
+      await api.post('/api/organizations', formData);
       setFormData({ name: '', description: '' });
       setShowCreateModal(false);
+      // Reload all data to get updated counts
+      await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to create organization');
     } finally {
@@ -102,13 +103,16 @@ export function Organizations() {
 
   return (
     <div className="app-layout">
-      <div className="main-content">
+      <div className="main-content" style={{ marginLeft: 0 }}>
         <div className="top-nav">
-          <div className="breadcrumb">Organizations</div>
+          <div className="breadcrumb">
+            <img 
+              src="https://dapsanalytics.com/assets/images/daps-logo-nav.svg" 
+              alt="DAPS" 
+              style={{ height: '24px', width: 'auto' }}
+            />
+          </div>
           <div className="user-menu">
-            <Link to="#" className="btn-logout">
-              Help & support
-            </Link>
             <div className="user-info">
               <div className="user-name">
                 {user.firstName} {user.lastName}

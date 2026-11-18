@@ -96,7 +96,13 @@ export function OrganizationDetail() {
       setMemberForm({ email: '', role: 'member' });
       setShowMemberModal(false);
     } catch (err: any) {
-      setMemberError(err.message || 'Failed to add member');
+      if (err.message.includes('User not found')) {
+        setMemberError('User not found. They must create an account first before being added to the organization.');
+      } else if (err.message.includes('already a member')) {
+        setMemberError('This user is already a member of the organization.');
+      } else {
+        setMemberError(err.message || 'Failed to add member');
+      }
     } finally {
       setMemberSubmitting(false);
     }
@@ -167,7 +173,7 @@ export function OrganizationDetail() {
 
   return (
     <div className="app-layout">
-      <Sidebar organizationName={organization.name} />
+      <Sidebar organizationId={orgId!} organizationName={organization.name} />
 
       <div className="main-content">
         <div className="top-nav">
@@ -361,7 +367,7 @@ export function OrganizationDetail() {
           setMemberError('');
         }}
         title="Add a team member"
-        subtitle="Invite an existing user by email."
+        subtitle="Invite an existing user by email. They must have an account first."
       >
         {memberError && <div className="alert alert-error">{memberError}</div>}
         <form onSubmit={handleAddMember}>

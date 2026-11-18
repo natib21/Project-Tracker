@@ -217,7 +217,7 @@ export function ProjectDetail() {
 
   return (
     <div className="app-layout">
-      <Sidebar organizationName={orgName} />
+      <Sidebar organizationId={orgId!} organizationName={orgName} />
 
       <div className="main-content">
         <div className="top-nav">
