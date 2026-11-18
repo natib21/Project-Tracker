@@ -1,8 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Navigation } from '../components/Navigation';
+import { Sidebar } from '../components/Sidebar';
+import { Modal } from '../components/Modal';
 import { api } from '../lib/api';
-import { formatETB } from '../lib/format';
 
 interface User {
   id: string;
@@ -43,10 +43,12 @@ export function OrganizationDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberForm, setMemberForm] = useState({ email: '', role: 'member' });
   const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [memberError, setMemberError] = useState('');
 
+  const [showProjectModal, setShowProjectModal] = useState(false);
   const [projectForm, setProjectForm] = useState({ name: '', description: '', budget: '' });
   const [projectSubmitting, setProjectSubmitting] = useState(false);
   const [projectError, setProjectError] = useState('');
@@ -92,6 +94,7 @@ export function OrganizationDetail() {
       const newMember = await api.post(`/api/organizations/${orgId}/members`, memberForm);
       setMembers([...members, newMember]);
       setMemberForm({ email: '', role: 'member' });
+      setShowMemberModal(false);
     } catch (err: any) {
       setMemberError(err.message || 'Failed to add member');
     } finally {
@@ -111,6 +114,7 @@ export function OrganizationDetail() {
       });
       setProjects([...projects, newProject]);
       setProjectForm({ name: '', description: '', budget: '' });
+      setShowProjectModal(false);
     } catch (err: any) {
       setProjectError(err.message || 'Failed to create project');
     } finally {
@@ -118,8 +122,41 @@ export function OrganizationDetail() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const getTotalBudget = () => {
+    return projects.reduce((sum, p) => sum + parseFloat(p.budget), 0);
+  };
+
+  const getTotalSpent = () => {
+    return projects.reduce((sum, p) => sum + parseFloat(p.spent), 0);
+  };
+
+  const getTotalRemaining = () => {
+    return getTotalBudget() - getTotalSpent();
+  };
+
+  const getStatusBadge = (project: Project) => {
+    if (project.overBudget) return { class: 'badge-over-budget', text: 'Over budget' };
+    if (parseFloat(project.remaining) === 0) return { class: 'badge-at-budget', text: 'At budget' };
+    const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+    if (percentUsed > 80) return { class: 'badge-at-risk', text: 'At risk' };
+    return { class: 'badge-on-track', text: 'On track' };
+  };
+
   if (loading) {
-    return <div className="container">Loading...</div>;
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+      </div>
+    );
   }
 
   if (!user || !organization) {
@@ -129,156 +166,310 @@ export function OrganizationDetail() {
   const isAdmin = userRole === 'admin';
 
   return (
-    <>
-      <Navigation user={user} />
-      <div className="container">
-        <h2>{organization.name}</h2>
-        {organization.description && <p className="description">{organization.description}</p>}
+    <div className="app-layout">
+      <Sidebar organizationName={organization.name} />
 
-        {error && <div className="error">{error}</div>}
-
-        <div className="card" style={{ marginTop: '24px' }}>
-          <h3>Members</h3>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr key={member.id}>
-                  <td>
-                    {member.user.firstName} {member.user.lastName}
-                  </td>
-                  <td>{member.user.email}</td>
-                  <td>
-                    <span className="role-badge">{member.role}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {isAdmin && (
-            <>
-              <h4 style={{ marginTop: '24px' }}>Add Member</h4>
-              {memberError && <div className="error">{memberError}</div>}
-              <form onSubmit={handleAddMember}>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="memberEmail">Email</label>
-                    <input
-                      type="email"
-                      id="memberEmail"
-                      value={memberForm.email}
-                      onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="memberRole">Role</label>
-                    <select
-                      id="memberRole"
-                      value={memberForm.role}
-                      onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
-                    >
-                      <option value="member">member</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  </div>
-                </div>
-                <button type="submit" className="btn" disabled={memberSubmitting}>
-                  {memberSubmitting ? 'Adding...' : 'Add Member'}
-                </button>
-              </form>
-            </>
-          )}
+      <div className="main-content">
+        <div className="top-nav">
+          <div className="breadcrumb">
+            <Link to="/organizations">Workspace</Link> / {organization.name}
+          </div>
+          <div className="user-menu">
+            <div className="user-info">
+              <div className="user-name">
+                {user.firstName} {user.lastName}
+              </div>
+              <div className="user-role">{userRole} account</div>
+            </div>
+            <button onClick={handleLogout} className="btn-logout">
+              Log out
+            </button>
+          </div>
         </div>
 
-        <div className="card" style={{ marginTop: '24px' }}>
-          <h3>Projects</h3>
-          {projects.length === 0 ? (
-            <p>No projects yet.</p>
-          ) : (
-            <div className="project-list">
-              {projects.map((project) => (
-                <Link
-                  key={project.id}
-                  to={`/organizations/${orgId}/projects/${project.id}`}
-                  className="project-card"
-                >
-                  <h4>{project.name}</h4>
-                  <div className="budget-summary">
-                    <div className="budget-item">
-                      <span className="label">Budget:</span>
-                      <span>{formatETB(parseFloat(project.budget))}</span>
-                    </div>
-                    <div className="budget-item">
-                      <span className="label">Spent:</span>
-                      <span>{formatETB(parseFloat(project.spent))}</span>
-                    </div>
-                    <div className="budget-item">
-                      <span className="label">Remaining:</span>
-                      <span>{formatETB(parseFloat(project.remaining))}</span>
-                    </div>
-                    {project.overBudget && (
-                      <div className="over-budget-badge">Over Budget</div>
-                    )}
-                  </div>
-                </Link>
-              ))}
+        <div className="container">
+          <div className="page-header-actions">
+            <div className="page-header">
+              <div className="page-title">ORGANIZATION OVERVIEW</div>
+              <h1>{organization.name}</h1>
+              {isAdmin && <div className="badge badge-admin">Admin</div>}
+              {!isAdmin && <div className="badge badge-member">Member</div>}
+              <div className="page-description">
+                {organization.description || 'Your projects, people and budgets in one place.'}
+              </div>
             </div>
-          )}
+          </div>
 
-          {isAdmin && (
-            <>
-              <h4 style={{ marginTop: '24px' }}>Create Project</h4>
-              {projectError && <div className="error">{projectError}</div>}
-              <form onSubmit={handleCreateProject}>
-                <div className="form-group">
-                  <label htmlFor="projectName">Name</label>
-                  <input
-                    type="text"
-                    id="projectName"
-                    value={projectForm.name}
-                    onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
-                    required
-                  />
+          {error && <div className="alert alert-error">{error}</div>}
+
+          {/* Budget Overview */}
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-label">Total budget · ETB</div>
+              <div className="stat-value">{getTotalBudget().toLocaleString()}</div>
+              <div className="stat-description">Across {projects.length} projects</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Spent · ETB</div>
+              <div className="stat-value">{getTotalSpent().toLocaleString()}</div>
+              <div className="stat-description">
+                {projects.length > 0
+                  ? `${Math.round((getTotalSpent() / getTotalBudget()) * 100)}% of allocated budget`
+                  : 'No spending yet'}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Remaining · ETB</div>
+              <div className="stat-value primary">{getTotalRemaining().toLocaleString()}</div>
+              <div className="stat-description">Available across all projects</div>
+            </div>
+          </div>
+
+          {/* Projects Section */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Projects</div>
+                <div className="card-subtitle">
+                  {projects.length} projects · All amounts in ETB
                 </div>
-                <div className="form-group">
-                  <label htmlFor="projectDescription">Description (optional)</label>
-                  <input
-                    type="text"
-                    id="projectDescription"
-                    value={projectForm.description}
-                    onChange={(e) =>
-                      setProjectForm({ ...projectForm, description: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="projectBudget">Budget (ETB)</label>
-                  <input
-                    type="number"
-                    id="projectBudget"
-                    step="0.01"
-                    min="0"
-                    value={projectForm.budget}
-                    onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })}
-                    required
-                  />
-                </div>
-                <button type="submit" className="btn" disabled={projectSubmitting}>
-                  {projectSubmitting ? 'Creating...' : 'Create Project'}
+              </div>
+              {isAdmin && (
+                <button onClick={() => setShowProjectModal(true)} className="btn btn-small btn-icon">
+                  + Create project
                 </button>
-              </form>
-            </>
-          )}
+              )}
+            </div>
+
+            {projects.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-tertiary)' }}>
+                No projects yet.
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>PROJECT NAME</th>
+                      <th>BUDGET · ETB</th>
+                      <th>SPENT · ETB</th>
+                      <th>REMAINING · ETB</th>
+                      <th>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projects.map((project) => {
+                      const status = getStatusBadge(project);
+                      const percentUsed =
+                        (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+                      return (
+                        <tr key={project.id}>
+                          <td>
+                            <Link
+                              to={`/organizations/${orgId}/projects/${project.id}`}
+                              style={{ color: 'var(--color-text-primary)', textDecoration: 'none', fontWeight: 500 }}
+                            >
+                              {project.name}
+                            </Link>
+                            <div className="progress-container" style={{ marginTop: '8px' }}>
+                              <div className="progress-bar">
+                                <div
+                                  className={`progress-fill ${percentUsed > 100 ? 'danger' : percentUsed > 80 ? 'warning' : ''}`}
+                                  style={{
+                                    width: `${Math.min(percentUsed, 100)}%`,
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{parseFloat(project.budget).toLocaleString()}</td>
+                          <td>{parseFloat(project.spent).toLocaleString()}</td>
+                          <td style={{ color: project.overBudget ? 'var(--color-error)' : 'var(--color-primary)' }}>
+                            {parseFloat(project.remaining).toLocaleString()}
+                          </td>
+                          <td>
+                            <div className={`badge ${status.class}`}>{status.text}</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Members Section */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Members</div>
+                <div className="card-subtitle">{members.length} people in this organization</div>
+              </div>
+              {isAdmin && (
+                <button onClick={() => setShowMemberModal(true)} className="btn btn-small btn-icon">
+                  + Add member
+                </button>
+              )}
+            </div>
+
+            {!isAdmin && (
+              <div className="alert alert-info" style={{ marginBottom: '16px' }}>
+                <strong>Member access</strong>
+                <div style={{ fontSize: '13px', marginTop: '4px' }}>
+                  You can add, edit and remove tasks. Organization and project settings are managed by
+                  an admin.
+                </div>
+              </div>
+            )}
+
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>NAME</th>
+                    <th>EMAIL</th>
+                    <th>ROLE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.id}>
+                      <td>
+                        {member.user.firstName} {member.user.lastName}
+                      </td>
+                      <td>{member.user.email}</td>
+                      <td>
+                        <div className={`badge badge-${member.role.toLowerCase()}`}>
+                          {member.role}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
-    </>
+
+      {/* Add Member Modal */}
+      <Modal
+        isOpen={showMemberModal}
+        onClose={() => {
+          setShowMemberModal(false);
+          setMemberError('');
+        }}
+        title="Add a team member"
+        subtitle="Invite an existing user by email."
+      >
+        {memberError && <div className="alert alert-error">{memberError}</div>}
+        <form onSubmit={handleAddMember}>
+          <div className="form-group">
+            <label htmlFor="memberEmail">Email address</label>
+            <input
+              type="email"
+              id="memberEmail"
+              placeholder="name@company.com"
+              value={memberForm.email}
+              onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="memberRole">Role</label>
+            <select
+              id="memberRole"
+              value={memberForm.role}
+              onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
+            >
+              <option value="member">member</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowMemberModal(false)}
+              disabled={memberSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={memberSubmitting}>
+              {memberSubmitting ? 'Adding...' : 'Add member'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create Project Modal */}
+      <Modal
+        isOpen={showProjectModal}
+        onClose={() => {
+          setShowProjectModal(false);
+          setProjectError('');
+        }}
+        title="Create project"
+        subtitle="Set a clear budget and execute it a budget."
+      >
+        {projectError && <div className="alert alert-error">{projectError}</div>}
+        <form onSubmit={handleCreateProject}>
+          <div className="form-group">
+            <label htmlFor="projectName">Project name</label>
+            <input
+              type="text"
+              id="projectName"
+              placeholder="e.g. Customer analytics"
+              value={projectForm.name}
+              onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="projectDescription">Description</label>
+            <input
+              type="text"
+              id="projectDescription"
+              placeholder="What is this project about?"
+              value={projectForm.description}
+              onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="projectBudget">Budget · ETB</label>
+            <input
+              type="number"
+              id="projectBudget"
+              step="0.01"
+              min="0"
+              placeholder="0"
+              value={projectForm.budget}
+              onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })}
+              required
+            />
+            <div className="form-hint">Budget must be greater than 0 ETB.</div>
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowProjectModal(false)}
+              disabled={projectSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={projectSubmitting}>
+              {projectSubmitting ? 'Creating...' : 'Create project'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
   );
 }

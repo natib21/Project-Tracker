@@ -1,8 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Navigation } from '../components/Navigation';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Sidebar } from '../components/Sidebar';
+import { Modal } from '../components/Modal';
 import { api } from '../lib/api';
-import { formatETB } from '../lib/format';
 
 interface User {
   id: string;
@@ -29,20 +29,18 @@ interface Task {
   estimatedCost: string;
 }
 
-interface Member {
-  role: string;
-}
-
 export function ProjectDetail() {
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [orgName, setOrgName] = useState<string>('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [userRole, setUserRole] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', estimatedCost: '' });
   const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [taskError, setTaskError] = useState('');
@@ -50,12 +48,12 @@ export function ProjectDetail() {
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', estimatedCost: '' });
 
-  const [editingProject, setEditingProject] = useState(false);
-  const [projectEditForm, setProjectEditForm] = useState({
-    name: '',
-    description: '',
-    budget: '',
-  });
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [projectForm, setProjectForm] = useState({ name: '', description: '', budget: '' });
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
+  const [projectError, setProjectError] = useState('');
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -63,18 +61,20 @@ export function ProjectDetail() {
 
   const loadData = async () => {
     try {
-      const [userData, projectData, tasksData, membersData] = await Promise.all([
+      const [userData, orgData, projectData, tasksData, membersData] = await Promise.all([
         api.get('/api/auth/me'),
+        api.get(`/api/organizations/${orgId}`),
         api.get(`/api/organizations/${orgId}/projects/${projectId}`),
         api.get(`/api/organizations/${orgId}/projects/${projectId}/tasks`),
         api.get(`/api/organizations/${orgId}/members`),
       ]);
       setUser(userData);
+      setOrgName(orgData.name);
       setProject(projectData);
       setTasks(tasksData);
 
       const currentUserMembership = membersData.find(
-        (m: Member & { user: { email: string } }) => m.user.email === userData.email,
+        (m: any) => m.user.email === userData.email,
       );
       setUserRole(currentUserMembership?.role || '');
     } catch (err: any) {
@@ -102,21 +102,13 @@ export function ProjectDetail() {
       });
       setTasks([...tasks, newTask]);
       setTaskForm({ title: '', description: '', estimatedCost: '' });
-      await loadData(); // Refresh to update budget summary
+      setShowTaskModal(false);
+      await loadData(); // Refresh budget
     } catch (err: any) {
       setTaskError(err.message || 'Failed to create task');
     } finally {
       setTaskSubmitting(false);
     }
-  };
-
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task.id);
-    setEditForm({
-      title: task.title,
-      description: task.description || '',
-      estimatedCost: task.estimatedCost,
-    });
   };
 
   const handleUpdateTask = async (taskId: string) => {
@@ -130,7 +122,7 @@ export function ProjectDetail() {
       );
       setTasks(tasks.map((t) => (t.id === taskId ? updated : t)));
       setEditingTask(null);
-      await loadData(); // Refresh to update budget summary
+      await loadData(); // Refresh budget
     } catch (err: any) {
       alert(err.message || 'Failed to update task');
     }
@@ -144,7 +136,7 @@ export function ProjectDetail() {
     try {
       await api.delete(`/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`);
       setTasks(tasks.filter((t) => t.id !== taskId));
-      await loadData(); // Refresh to update budget summary
+      await loadData(); // Refresh budget
     } catch (err: any) {
       alert(err.message || 'Failed to delete task');
     }
@@ -152,34 +144,35 @@ export function ProjectDetail() {
 
   const handleEditProject = () => {
     if (project) {
-      setEditingProject(true);
-      setProjectEditForm({
+      setProjectForm({
         name: project.name,
         description: project.description || '',
         budget: project.budget,
       });
+      setShowProjectModal(true);
     }
   };
 
   const handleUpdateProject = async (e: FormEvent) => {
     e.preventDefault();
+    setProjectError('');
+    setProjectSubmitting(true);
+
     try {
       const updated = await api.patch(`/api/organizations/${orgId}/projects/${projectId}`, {
-        ...projectEditForm,
-        budget: parseFloat(projectEditForm.budget),
+        ...projectForm,
+        budget: parseFloat(projectForm.budget),
       });
       setProject(updated);
-      setEditingProject(false);
+      setShowProjectModal(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to update project');
+      setProjectError(err.message || 'Failed to update project');
+    } finally {
+      setProjectSubmitting(false);
     }
   };
 
   const handleDeleteProject = async () => {
-    if (!confirm('Are you sure you want to delete this project? All tasks will be deleted.')) {
-      return;
-    }
-
     try {
       await api.delete(`/api/organizations/${orgId}/projects/${projectId}`);
       navigate(`/organizations/${orgId}`);
@@ -188,8 +181,30 @@ export function ProjectDetail() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const getStatusBadge = () => {
+    if (!project) return { class: '', text: '' };
+    if (project.overBudget) return { class: 'badge-over-budget', text: 'Over budget' };
+    if (parseFloat(project.remaining) === 0) return { class: 'badge-at-budget', text: 'At budget' };
+    const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+    if (percentUsed > 80) return { class: 'badge-at-risk', text: 'At risk' };
+    return { class: 'badge-on-track', text: 'On track' };
+  };
+
   if (loading) {
-    return <div className="container">Loading...</div>;
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+      </div>
+    );
   }
 
   if (!user || !project) {
@@ -197,229 +212,394 @@ export function ProjectDetail() {
   }
 
   const isAdmin = userRole === 'admin';
+  const status = getStatusBadge();
+  const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
 
   return (
-    <>
-      <Navigation user={user} />
-      <div className="container">
-        <div className="breadcrumb">
-          <a href="/organizations">Organizations</a> →{' '}
-          <a href={`/organizations/${orgId}`}>Organization</a> → {project.name}
+    <div className="app-layout">
+      <Sidebar organizationName={orgName} />
+
+      <div className="main-content">
+        <div className="top-nav">
+          <div className="breadcrumb">
+            <Link to="/organizations">Organizations</Link> /
+            <Link to={`/organizations/${orgId}`}> {orgName}</Link> /
+            <Link to={`/organizations/${orgId}/projects/${projectId}`}> {project.name}</Link>
+          </div>
+          <div className="user-menu">
+            <div className="user-info">
+              <div className="user-name">
+                {user.firstName} {user.lastName}
+              </div>
+              <div className="user-role">{userRole} account</div>
+            </div>
+            <button onClick={handleLogout} className="btn-logout">
+              Log out
+            </button>
+          </div>
         </div>
 
-        <div className="project-header">
-          {editingProject ? (
-            <form onSubmit={handleUpdateProject} className="edit-form">
-              <div className="form-group">
-                <label htmlFor="projectName">Name</label>
-                <input
-                  type="text"
-                  id="projectName"
-                  value={projectEditForm.name}
-                  onChange={(e) =>
-                    setProjectEditForm({ ...projectEditForm, name: e.target.value })
-                  }
-                  required
-                />
+        <div className="container">
+          <div className="page-header-actions">
+            <div className="page-header">
+              <h1>{project.name}</h1>
+              {project.description && (
+                <div className="page-description">{project.description}</div>
+              )}
+              <div style={{ marginTop: '12px' }}>
+                <div className={`badge ${status.class}`}>{status.text}</div>
               </div>
-              <div className="form-group">
-                <label htmlFor="projectDescription">Description</label>
-                <input
-                  type="text"
-                  id="projectDescription"
-                  value={projectEditForm.description}
-                  onChange={(e) =>
-                    setProjectEditForm({ ...projectEditForm, description: e.target.value })
-                  }
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="projectBudget">Budget (ETB)</label>
-                <input
-                  type="number"
-                  id="projectBudget"
-                  step="0.01"
-                  min="0"
-                  value={projectEditForm.budget}
-                  onChange={(e) =>
-                    setProjectEditForm({ ...projectEditForm, budget: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="button-group">
-                <button type="submit" className="btn">
-                  Save
+            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button onClick={handleEditProject} className="btn btn-secondary btn-small">
+                  Edit project
                 </button>
                 <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setEditingProject(false)}
+                  onClick={() => setShowDeleteModal(true)}
+                  className="btn btn-danger btn-small"
                 >
-                  Cancel
+                  Delete project
                 </button>
               </div>
-            </form>
-          ) : (
-            <>
-              <div>
-                <h2>{project.name}</h2>
-                {project.description && <p className="description">{project.description}</p>}
-              </div>
-              {isAdmin && (
-                <div className="button-group">
-                  <button onClick={handleEditProject} className="btn">
-                    Edit Project
-                  </button>
-                  <button onClick={handleDeleteProject} className="btn-danger">
-                    Delete Project
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {error && <div className="error">{error}</div>}
-
-        <div className="card" style={{ marginTop: '24px' }}>
-          <h3>Budget Summary</h3>
-          <div className="budget-grid">
-            <div className="budget-item-large">
-              <span className="label">Budget:</span>
-              <span className="value">{formatETB(parseFloat(project.budget))}</span>
-            </div>
-            <div className="budget-item-large">
-              <span className="label">Spent:</span>
-              <span className="value">{formatETB(parseFloat(project.spent))}</span>
-            </div>
-            <div className="budget-item-large">
-              <span className="label">Remaining:</span>
-              <span className="value">{formatETB(parseFloat(project.remaining))}</span>
-            </div>
+            )}
           </div>
-          {project.overBudget && (
-            <div className="over-budget-banner">⚠️ This project is over budget</div>
-          )}
-        </div>
 
-        <div className="card" style={{ marginTop: '24px' }}>
-          <h3>Tasks</h3>
-          {tasks.length === 0 ? (
-            <p>No tasks yet.</p>
-          ) : (
-            <div className="task-list">
-              {tasks.map((task) =>
-                editingTask === task.id ? (
-                  <div key={task.id} className="task-item editing">
-                    <div className="form-group">
-                      <label>Title</label>
-                      <input
-                        type="text"
-                        value={editForm.title}
-                        onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Description</label>
-                      <input
-                        type="text"
-                        value={editForm.description}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, description: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Estimated Cost (ETB)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={editForm.estimatedCost}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, estimatedCost: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="button-group">
-                      <button onClick={() => handleUpdateTask(task.id)} className="btn-small">
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setEditingTask(null)}
-                        className="btn-small btn-secondary"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={task.id} className="task-item">
-                    <div className="task-content">
-                      <h4>{task.title}</h4>
-                      {task.description && <p>{task.description}</p>}
-                      <span className="cost">{formatETB(parseFloat(task.estimatedCost))}</span>
-                    </div>
-                    <div className="button-group">
-                      <button onClick={() => handleEditTask(task)} className="btn-small">
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="btn-small btn-danger"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          )}
+          {error && <div className="alert alert-error">{error}</div>}
 
-          <h4 style={{ marginTop: '24px' }}>Add Task</h4>
-          {taskError && <div className="error">{taskError}</div>}
-          <form onSubmit={handleCreateTask}>
-            <div className="form-group">
-              <label htmlFor="taskTitle">Title</label>
-              <input
-                type="text"
-                id="taskTitle"
-                value={taskForm.title}
-                onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                required
-              />
+          {/* Budget Summary */}
+          <div className="card">
+            <div className="card-title">Budget Summary</div>
+            <div className="stats-grid" style={{ marginTop: '16px' }}>
+              <div className="stat-card">
+                <div className="stat-label">Project budget · ETB</div>
+                <div className="stat-value">{parseFloat(project.budget).toLocaleString()}</div>
+                <div className="stat-description">Total allocated budget</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Spent · ETB</div>
+                <div className="stat-value">{parseFloat(project.spent).toLocaleString()}</div>
+                <div className="stat-description">Sum of task estimated costs</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-label">Remaining · ETB</div>
+                <div className="stat-value primary">
+                  {parseFloat(project.remaining).toLocaleString()}
+                </div>
+                <div className="stat-description">
+                  {Math.max(0, Math.round(100 - percentUsed))}% available
+                </div>
+              </div>
             </div>
-            <div className="form-group">
-              <label htmlFor="taskDescription">Description (optional)</label>
-              <input
-                type="text"
-                id="taskDescription"
-                value={taskForm.description}
-                onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-              />
+
+            <div className="progress-container" style={{ marginTop: '24px' }}>
+              <div className="progress-header">
+                <div className="progress-label">Budget utilization</div>
+                <div className="progress-value">{Math.round(percentUsed)}% used</div>
+              </div>
+              <div className="progress-bar">
+                <div
+                  className={`progress-fill ${percentUsed > 100 ? 'danger' : percentUsed > 80 ? 'warning' : ''}`}
+                  style={{
+                    width: `${Math.min(percentUsed, 100)}%`,
+                  }}
+                ></div>
+              </div>
             </div>
-            <div className="form-group">
-              <label htmlFor="taskCost">Estimated Cost (ETB)</label>
-              <input
-                type="number"
-                id="taskCost"
-                step="0.01"
-                min="0"
-                value={taskForm.estimatedCost}
-                onChange={(e) => setTaskForm({ ...taskForm, estimatedCost: e.target.value })}
-                required
-              />
+
+            {project.overBudget && (
+              <div className="alert alert-error" style={{ marginTop: '16px' }}>
+                <strong>⚠️ This project is over budget</strong>
+                <div style={{ fontSize: '13px', marginTop: '4px' }}>
+                  The sum of task costs exceeds the allocated budget. The remaining project budget will
+                  be re-calculated.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tasks Section */}
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Tasks</div>
+                <div className="card-subtitle">
+                  {tasks.length} tasks · All estimated costs in ETB
+                </div>
+              </div>
+              <button onClick={() => setShowTaskModal(true)} className="btn btn-small btn-icon">
+                + Add task
+              </button>
             </div>
-            <button type="submit" className="btn" disabled={taskSubmitting}>
-              {taskSubmitting ? 'Adding...' : 'Add Task'}
-            </button>
-          </form>
+
+            {tasks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-tertiary)' }}>
+                No tasks yet. Add your first task to get started.
+              </div>
+            ) : (
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>TASK / DESCRIPTION</th>
+                      <th>ESTIMATED COST · ETB</th>
+                      <th>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map((task) =>
+                      editingTask === task.id ? (
+                        <tr key={task.id}>
+                          <td colSpan={3}>
+                            <div style={{ padding: '16px', background: 'var(--color-bg-primary)', borderRadius: '4px' }}>
+                              <div className="form-group">
+                                <label>Title</label>
+                                <input
+                                  type="text"
+                                  value={editForm.title}
+                                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                                  required
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label>Description</label>
+                                <input
+                                  type="text"
+                                  value={editForm.description}
+                                  onChange={(e) =>
+                                    setEditForm({ ...editForm, description: e.target.value })
+                                  }
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label>Estimated Cost · ETB</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={editForm.estimatedCost}
+                                  onChange={(e) =>
+                                    setEditForm({ ...editForm, estimatedCost: e.target.value })
+                                  }
+                                  required
+                                />
+                              </div>
+                              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button
+                                  onClick={() => setEditingTask(null)}
+                                  className="btn btn-secondary btn-small"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateTask(task.id)}
+                                  className="btn btn-small"
+                                >
+                                  Save changes
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={task.id}>
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{task.title}</div>
+                            {task.description && (
+                              <div style={{ fontSize: '13px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                                {task.description}
+                              </div>
+                            )}
+                          </td>
+                          <td>{parseFloat(task.estimatedCost).toLocaleString()}</td>
+                          <td>
+                            <div className="table-actions">
+                              <button
+                                onClick={() => {
+                                  setEditingTask(task.id);
+                                  setEditForm({
+                                    title: task.title,
+                                    description: task.description || '',
+                                    estimatedCost: task.estimatedCost,
+                                  });
+                                }}
+                                className="table-action"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTask(task.id)}
+                                className="table-action danger"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </>
+
+      {/* Add Task Modal */}
+      <Modal
+        isOpen={showTaskModal}
+        onClose={() => {
+          setShowTaskModal(false);
+          setTaskError('');
+        }}
+        title="Create task"
+        subtitle={`Add work to ${project.name}.`}
+      >
+        {taskError && <div className="alert alert-error">{taskError}</div>}
+        <form onSubmit={handleCreateTask}>
+          <div className="form-group">
+            <label htmlFor="taskTitle">Task title</label>
+            <input
+              type="text"
+              id="taskTitle"
+              placeholder="e.g. API integration"
+              value={taskForm.title}
+              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="taskDescription">Description</label>
+            <input
+              type="text"
+              id="taskDescription"
+              placeholder="Describe the work to be done"
+              value={taskForm.description}
+              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="taskCost">Estimated cost · ETB</label>
+            <input
+              type="number"
+              id="taskCost"
+              step="0.01"
+              min="0"
+              placeholder="0"
+              value={taskForm.estimatedCost}
+              onChange={(e) => setTaskForm({ ...taskForm, estimatedCost: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowTaskModal(false)}
+              disabled={taskSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={taskSubmitting}>
+              {taskSubmitting ? 'Adding...' : 'Add task'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Project Modal */}
+      <Modal
+        isOpen={showProjectModal}
+        onClose={() => {
+          setShowProjectModal(false);
+          setProjectError('');
+        }}
+        title="Edit project"
+        subtitle="Update the project's name and budget."
+      >
+        {projectError && <div className="alert alert-error">{projectError}</div>}
+        <form onSubmit={handleUpdateProject}>
+          <div className="form-group">
+            <label htmlFor="projectName">Project name</label>
+            <input
+              type="text"
+              id="projectName"
+              value={projectForm.name}
+              onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="projectDescription">Description</label>
+            <input
+              type="text"
+              id="projectDescription"
+              value={projectForm.description}
+              onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="projectBudget">Budget · ETB</label>
+            <input
+              type="number"
+              id="projectBudget"
+              step="0.01"
+              min="0"
+              value={projectForm.budget}
+              onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowProjectModal(false)}
+              disabled={projectSubmitting}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn" disabled={projectSubmitting}>
+              {projectSubmitting ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Project Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete project?"
+        subtitle="This project and all of its tasks will be permanently deleted."
+      >
+        <div className="alert alert-error">
+          <strong>"{project.name}" and all its tasks will be removed.</strong>
+          <div style={{ fontSize: '13px', marginTop: '4px' }}>
+            Budget and task history cannot be recovered.
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            Cancel
+          </button>
+          <button onClick={handleDeleteProject} className="btn btn-danger">
+            Delete project
+          </button>
+        </div>
+      </Modal>
+    </div>
   );
 }
