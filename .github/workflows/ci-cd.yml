@@ -5,6 +5,9 @@ on:
     branches:
       - '**'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test
@@ -40,11 +43,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -52,8 +55,11 @@ jobs:
       - name: Run migrations
         run: npm run migration:run
 
-      - name: Run tests
-        run: npm test
+      - name: Run e2e tests
+        run: npm run test:e2e --workspace=apps/api
+
+      - name: Build Docker image
+        run: docker build -t project-tracker .
 
   deploy:
     name: Deploy to Render
@@ -63,5 +69,6 @@ jobs:
 
     steps:
       - name: Trigger Render deployment
-        run: |
-          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL"

@@ -18,5 +18,6 @@ RUN npm ci --omit=dev --workspace=apps/api
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/dist ./apps/api/public
 COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
+RUN sed -i 's/\r$//' ./apps/api/docker-entrypoint.sh
 EXPOSE 3000
 CMD ["sh", "./apps/api/docker-entrypoint.sh"]
