@@ -16,6 +16,6 @@ import { RolesGuard } from './guards/roles.guard';
   ],
   controllers: [MembershipsController],
   providers: [MembershipsService, OrgAccessGuard, RolesGuard],
-  exports: [TypeOrmModule, OrgAccessGuard, RolesGuard],
+  exports: [TypeOrmModule, MembershipsService, OrgAccessGuard, RolesGuard],
 })
 export class MembershipsModule {}
