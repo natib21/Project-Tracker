@@ -155,7 +155,9 @@ export function Organizations() {
                 <Link key={org.id} to={`/organizations/${org.id}`} className="org-card">
                   <div className="org-card-header">
                     <div className="org-initial">{getInitials(org.name)}</div>
-                    <div className={`badge badge-${org.role.toLowerCase()}`}>{org.role}</div>
+                    <div className={`badge badge-${(org.role || 'member').toLowerCase()}`}>
+                      {org.role || 'member'}
+                    </div>
                   </div>
                   <h3>{org.name}</h3>
                   <div className="org-card-description">

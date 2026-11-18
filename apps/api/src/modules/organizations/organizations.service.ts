@@ -32,8 +32,8 @@ export class OrganizationsService {
     });
   }
 
-  async findAllForUser(userId: string): Promise<Organization[]> {
-    return this.organizationRepository
+  async findAllForUser(userId: string): Promise<any[]> {
+    const result = await this.organizationRepository
       .createQueryBuilder('organization')
       .innerJoin(
         'organization.memberships',
@@ -41,7 +41,13 @@ export class OrganizationsService {
         'membership.userId = :userId',
         { userId },
       )
-      .getMany();
+      .addSelect('membership.role', 'role')
+      .getRawAndEntities();
+
+    return result.entities.map((org, index) => ({
+      ...org,
+      role: result.raw[index].role,
+    }));
   }
 
   async findOne(orgId: string): Promise<Organization> {

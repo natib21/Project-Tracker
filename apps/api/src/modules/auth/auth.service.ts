@@ -7,86 +7,76 @@ import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+const BCRYPT_ROUNDS = 12;
+const PG_UNIQUE_VIOLATION = '23505';
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const isUniqueViolation = (error: any) =>
+  error?.code === PG_UNIQUE_VIOLATION || error?.driverError?.code === PG_UNIQUE_VIOLATION;
+
 @Injectable()
 export class AuthService {
+  // Used when the email is unknown, so login takes about the same time either way
+  private readonly dummyHash = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS);
+
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    private jwtService: JwtService,
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) {}
 
-  async register(registerDto: RegisterDto) {
-    const existingUser = await this.userRepository.findOne({
-      where: { email: registerDto.email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Email already exists');
+  async register(dto: RegisterDto) {
+    const password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+     console.log(dto,password)
+    try {
+      const user = await this.userRepository.save(
+        this.userRepository.create({
+          email: normalizeEmail(dto.email),
+          password,
+          firstName: dto.firstName.trim(),
+          lastName: dto.lastName.trim(),
+        }),
+      );
+      return this.buildAuthResponse(user);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException('Email already exists');
+      }
+      throw error;
     }
-
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-    const user = this.userRepository.create({
-      email: registerDto.email,
-      password: hashedPassword,
-      firstName: registerDto.firstName,
-      lastName: registerDto.lastName,
-    });
-
-    await this.userRepository.save(user);
-
-    const payload = { sub: user.id, email: user.email };
-    const token = this.jwtService.sign(payload);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-      token,
-    };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(dto: LoginDto) {
     const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
+      where: { email: normalizeEmail(dto.email) },
     });
 
-    if (!user) {
+    const passwordMatches = await bcrypt.compare(dto.password, user?.password ?? this.dummyHash);
+
+    if (!user || !passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const payload = { sub: user.id, email: user.email };
-    const token = this.jwtService.sign(payload);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-      token,
-    };
+    return this.buildAuthResponse(user);
   }
 
   async validateUser(userId: string) {
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-    });
-
+    const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+    return this.toPublicUser(user);
+  }
 
+  private buildAuthResponse(user: User) {
+    return {
+      user: this.toPublicUser(user),
+      token: this.jwtService.sign({ sub: user.id, email: user.email }),
+    };
+  }
+
+  private toPublicUser(user: User) {
     return {
       id: user.id,
       email: user.email,
