@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, getErrorMessage } from '../lib/api';
+import type { AuthResponse } from '../types';
 
 export function Login() {
   const navigate = useNavigate();
@@ -17,10 +18,10 @@ export function Login() {
     setLoading(true);
 
     try {
-      await api.post('/api/auth/login', formData);
+      await api.post<AuthResponse>('/api/auth/login', formData);
       navigate('/organizations');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

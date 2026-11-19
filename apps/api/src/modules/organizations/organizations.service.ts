@@ -43,7 +43,9 @@ async findAllForUser(userId: string) {
   if (memberships.length === 0) return [];
 
   const orgIds = memberships.map((m) => m.organizationId);
-  const counts = await membershipRepo
+  
+  // Get member counts
+  const memberCounts = await membershipRepo
     .createQueryBuilder('m')
     .select('m."organizationId"', 'organizationId')
     .addSelect('COUNT(*)', 'count')
@@ -51,14 +53,27 @@ async findAllForUser(userId: string) {
     .groupBy('m."organizationId"')
     .getRawMany();
 
-  const countByOrg = new Map(counts.map((c) => [c.organizationId, Number(c.count)]));
+  const memberCountByOrg = new Map(memberCounts.map((c) => [c.organizationId, Number(c.count)]));
+
+  // Get project counts
+  const projectCounts = await this.organizationRepository
+    .createQueryBuilder('org')
+    .leftJoin('org.projects', 'p')
+    .select('org.id', 'organizationId')
+    .addSelect('COUNT(p.id)', 'count')
+    .where('org.id IN (:...orgIds)', { orgIds })
+    .groupBy('org.id')
+    .getRawMany();
+
+  const projectCountByOrg = new Map(projectCounts.map((c) => [c.organizationId, Number(c.count)]));
 
   return memberships.map((m) => ({
     id: m.organization.id,
     name: m.organization.name,
     description: m.organization.description,
     role: m.role,
-    memberCount: countByOrg.get(m.organizationId) ?? 0,
+    memberCount: memberCountByOrg.get(m.organizationId) ?? 0,
+    projectCount: projectCountByOrg.get(m.organizationId) ?? 0,
   }));
 }
 

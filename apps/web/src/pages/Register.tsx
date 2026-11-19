@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api, getErrorMessage } from '../lib/api';
+import type { AuthResponse } from '../types';
 
 export function Register() {
   const navigate = useNavigate();
@@ -19,10 +20,10 @@ export function Register() {
     setLoading(true);
 
     try {
-      await api.post('/api/auth/register', formData);
+      await api.post<AuthResponse>('/api/auth/register', formData);
       navigate('/organizations');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

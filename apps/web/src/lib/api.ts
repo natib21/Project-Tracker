@@ -1,9 +1,24 @@
-interface ApiError {
-  status: number;
-  message: string;
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
-async function apiFetch(url: string, options: RequestInit = {}): Promise<any> {
+export function getErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return err.message;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return 'An unexpected error occurred';
+}
+
+async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...options,
     credentials: 'include',
@@ -15,7 +30,7 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<any> {
 
   if (response.status === 401) {
     window.location.href = '/login';
-    throw { status: 401, message: 'Unauthorized' } as ApiError;
+    throw new ApiError(401, 'Unauthorized');
   }
 
   if (!response.ok) {
@@ -26,21 +41,21 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<any> {
     } catch {
       // Ignore JSON parse errors
     }
-    throw { status: response.status, message } as ApiError;
+    throw new ApiError(response.status, message);
   }
 
   if (response.status === 204) {
-    return null;
+    return null as T;
   }
 
   return response.json();
 }
 
 export const api = {
-  get: (url: string) => apiFetch(url, { method: 'GET' }),
-  post: (url: string, body?: any) =>
-    apiFetch(url, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
-  patch: (url: string, body: any) =>
-    apiFetch(url, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: (url: string) => apiFetch(url, { method: 'DELETE' }),
+  get: <T>(url: string) => request<T>(url, { method: 'GET' }),
+  post: <T>(url: string, body?: unknown) =>
+    request<T>(url, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(url: string, body: unknown) =>
+    request<T>(url, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: <T>(url: string) => request<T>(url, { method: 'DELETE' }),
 };

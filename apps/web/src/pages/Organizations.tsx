@@ -1,27 +1,13 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
-import { api } from '../lib/api';
-
-interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  description?: string;
-  role: string;
-  _count?: { projects: number; memberships: number };
-}
+import { api, ApiError, getErrorMessage } from '../lib/api';
+import type { User, OrganizationListItem, CreateOrganizationDto } from '../types';
 
 export function Organizations() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizations, setOrganizations] = useState<OrganizationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -30,28 +16,28 @@ export function Organizations() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [userData, orgsData] = await Promise.all([
-        api.get('/api/auth/me'),
-        api.get('/api/organizations'),
+        api.get<User>('/api/auth/me'),
+        api.get<OrganizationListItem[]>('/api/organizations'),
       ]);
       setUser(userData);
       setOrganizations(orgsData);
-    } catch (err: any) {
-      if (err.status === 401) {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
         navigate('/login');
       } else {
-        setError(err.message || 'Failed to load data');
+        setError(getErrorMessage(err));
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCreateOrg = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,13 +45,13 @@ export function Organizations() {
     setSubmitting(true);
 
     try {
-      await api.post('/api/organizations', formData);
+      await api.post<CreateOrganizationDto>('/api/organizations', formData);
       setFormData({ name: '', description: '' });
       setShowCreateModal(false);
       // Reload all data to get updated counts
       await loadData();
-    } catch (err: any) {
-      setFormError(err.message || 'Failed to create organization');
+    } catch (err) {
+      setFormError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -73,7 +59,7 @@ export function Organizations() {
 
   const handleLogout = async () => {
     try {
-      await api.post('/api/auth/logout');
+      await api.post<void>('/api/auth/logout');
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -168,9 +154,9 @@ export function Organizations() {
                     {org.description || 'Your enterprise workspace'}
                   </div>
                   <div className="org-card-meta">
-                    <span>{org._count?.projects || 0} projects</span>
+                    <span>{org.projectCount} projects</span>
                     <span>·</span>
-                    <span>{org._count?.memberships || 0} members</span>
+                    <span>{org.memberCount} members</span>
                   </div>
                 </Link>
               ))}

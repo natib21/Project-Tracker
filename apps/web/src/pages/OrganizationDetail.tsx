@@ -1,36 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Modal } from '../components/Modal';
-import { api } from '../lib/api';
-
-interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  description?: string;
-}
-
-interface Member {
-  id: string;
-  user: { firstName: string; lastName: string; email: string };
-  role: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  budget: string;
-  spent: string;
-  remaining: string;
-  overBudget: boolean;
-}
+import { api, ApiError, getErrorMessage } from '../lib/api';
+import type { User, Organization, Member, Project } from '../types';
 
 export function OrganizationDetail() {
   const { orgId } = useParams<{ orgId: string }>();
@@ -53,17 +26,13 @@ export function OrganizationDetail() {
   const [projectSubmitting, setProjectSubmitting] = useState(false);
   const [projectError, setProjectError] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, [orgId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [userData, orgData, membersData, projectsData] = await Promise.all([
-        api.get('/api/auth/me'),
-        api.get(`/api/organizations/${orgId}`),
-        api.get(`/api/organizations/${orgId}/members`),
-        api.get(`/api/organizations/${orgId}/projects`),
+        api.get<User>('/api/auth/me'),
+        api.get<Organization>(`/api/organizations/${orgId}`),
+        api.get<Member[]>(`/api/organizations/${orgId}/members`),
+        api.get<Project[]>(`/api/organizations/${orgId}/projects`),
       ]);
       setUser(userData);
       setOrganization(orgData);
@@ -72,18 +41,26 @@ export function OrganizationDetail() {
 
       const currentUserMembership = membersData.find((m: Member) => m.user.email === userData.email);
       setUserRole(currentUserMembership?.role || '');
-    } catch (err: any) {
-      if (err.status === 404) {
-        navigate('/not-found');
-      } else if (err.status === 403) {
-        navigate('/forbidden');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 404) {
+          navigate('/not-found');
+        } else if (err.status === 403) {
+          navigate('/forbidden');
+        } else {
+          setError(getErrorMessage(err));
+        }
       } else {
-        setError(err.message || 'Failed to load data');
+        setError(getErrorMessage(err));
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, navigate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleAddMember = async (e: FormEvent) => {
     e.preventDefault();
@@ -91,17 +68,18 @@ export function OrganizationDetail() {
     setMemberSubmitting(true);
 
     try {
-      const newMember = await api.post(`/api/organizations/${orgId}/members`, memberForm);
+      const newMember = await api.post<Member>(`/api/organizations/${orgId}/members`, memberForm);
       setMembers([...members, newMember]);
       setMemberForm({ email: '', role: 'member' });
       setShowMemberModal(false);
-    } catch (err: any) {
-      if (err.message.includes('User not found')) {
+    } catch (err) {
+      const message = getErrorMessage(err);
+      if (message.includes('User not found')) {
         setMemberError('User not found. They must create an account first before being added to the organization.');
-      } else if (err.message.includes('already a member')) {
+      } else if (message.includes('already a member')) {
         setMemberError('This user is already a member of the organization.');
       } else {
-        setMemberError(err.message || 'Failed to add member');
+        setMemberError(message);
       }
     } finally {
       setMemberSubmitting(false);
@@ -114,15 +92,15 @@ export function OrganizationDetail() {
     setProjectSubmitting(true);
 
     try {
-      const newProject = await api.post(`/api/organizations/${orgId}/projects`, {
+      const newProject = await api.post<Project>(`/api/organizations/${orgId}/projects`, {
         ...projectForm,
         budget: parseFloat(projectForm.budget),
       });
       setProjects([...projects, newProject]);
       setProjectForm({ name: '', description: '', budget: '' });
       setShowProjectModal(false);
-    } catch (err: any) {
-      setProjectError(err.message || 'Failed to create project');
+    } catch (err) {
+      setProjectError(getErrorMessage(err));
     } finally {
       setProjectSubmitting(false);
     }
@@ -130,7 +108,7 @@ export function OrganizationDetail() {
 
   const handleLogout = async () => {
     try {
-      await api.post('/api/auth/logout');
+      await api.post<void>('/api/auth/logout');
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -138,11 +116,11 @@ export function OrganizationDetail() {
   };
 
   const getTotalBudget = () => {
-    return projects.reduce((sum, p) => sum + parseFloat(p.budget), 0);
+    return projects.reduce((sum, p) => sum + p.budget, 0);
   };
 
   const getTotalSpent = () => {
-    return projects.reduce((sum, p) => sum + parseFloat(p.spent), 0);
+    return projects.reduce((sum, p) => sum + p.spent, 0);
   };
 
   const getTotalRemaining = () => {
@@ -151,8 +129,8 @@ export function OrganizationDetail() {
 
   const getStatusBadge = (project: Project) => {
     if (project.overBudget) return { class: 'badge-over-budget', text: 'Over budget' };
-    if (parseFloat(project.remaining) === 0) return { class: 'badge-at-budget', text: 'At budget' };
-    const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+    if (project.remaining === 0) return { class: 'badge-at-budget', text: 'At budget' };
+    const percentUsed = (project.spent / project.budget) * 100;
     if (percentUsed > 80) return { class: 'badge-at-risk', text: 'At risk' };
     return { class: 'badge-on-track', text: 'On track' };
   };
@@ -267,7 +245,7 @@ export function OrganizationDetail() {
                     {projects.map((project) => {
                       const status = getStatusBadge(project);
                       const percentUsed =
-                        (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+                        (project.spent / project.budget) * 100;
                       return (
                         <tr key={project.id}>
                           <td>
@@ -288,10 +266,10 @@ export function OrganizationDetail() {
                               </div>
                             </div>
                           </td>
-                          <td>{parseFloat(project.budget).toLocaleString()}</td>
-                          <td>{parseFloat(project.spent).toLocaleString()}</td>
+                          <td>{project.budget.toLocaleString()}</td>
+                          <td>{project.spent.toLocaleString()}</td>
                           <td style={{ color: project.overBudget ? 'var(--color-error)' : 'var(--color-primary)' }}>
-                            {parseFloat(project.remaining).toLocaleString()}
+                            {project.remaining.toLocaleString()}
                           </td>
                           <td>
                             <div className={`badge ${status.class}`}>{status.text}</div>

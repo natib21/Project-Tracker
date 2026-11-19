@@ -1,33 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Modal } from '../components/Modal';
-import { api } from '../lib/api';
-
-interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  budget: string;
-  spent: string;
-  remaining: string;
-  overBudget: boolean;
-  organizationId: string;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  estimatedCost: string;
-}
+import { api, ApiError, getErrorMessage } from '../lib/api';
+import type { User, Organization, Project, Task, Member } from '../types';
 
 export function ProjectDetail() {
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
@@ -55,18 +31,14 @@ export function ProjectDetail() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [orgId, projectId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [userData, orgData, projectData, tasksData, membersData] = await Promise.all([
-        api.get('/api/auth/me'),
-        api.get(`/api/organizations/${orgId}`),
-        api.get(`/api/organizations/${orgId}/projects/${projectId}`),
-        api.get(`/api/organizations/${orgId}/projects/${projectId}/tasks`),
-        api.get(`/api/organizations/${orgId}/members`),
+        api.get<User>('/api/auth/me'),
+        api.get<Organization>(`/api/organizations/${orgId}`),
+        api.get<Project>(`/api/organizations/${orgId}/projects/${projectId}`),
+        api.get<Task[]>(`/api/organizations/${orgId}/projects/${projectId}/tasks`),
+        api.get<Member[]>(`/api/organizations/${orgId}/members`),
       ]);
       setUser(userData);
       setOrgName(orgData.name);
@@ -74,21 +46,29 @@ export function ProjectDetail() {
       setTasks(tasksData);
 
       const currentUserMembership = membersData.find(
-        (m: any) => m.user.email === userData.email,
+        (m) => m.user.email === userData.email,
       );
       setUserRole(currentUserMembership?.role || '');
-    } catch (err: any) {
-      if (err.status === 404) {
-        navigate('/not-found');
-      } else if (err.status === 403) {
-        navigate('/forbidden');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 404) {
+          navigate('/not-found');
+        } else if (err.status === 403) {
+          navigate('/forbidden');
+        } else {
+          setError(getErrorMessage(err));
+        }
       } else {
-        setError(err.message || 'Failed to load data');
+        setError(getErrorMessage(err));
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [orgId, projectId, navigate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCreateTask = async (e: FormEvent) => {
     e.preventDefault();
@@ -96,7 +76,7 @@ export function ProjectDetail() {
     setTaskSubmitting(true);
 
     try {
-      const newTask = await api.post(`/api/organizations/${orgId}/projects/${projectId}/tasks`, {
+      const newTask = await api.post<Task>(`/api/organizations/${orgId}/projects/${projectId}/tasks`, {
         ...taskForm,
         estimatedCost: parseFloat(taskForm.estimatedCost),
       });
@@ -104,8 +84,8 @@ export function ProjectDetail() {
       setTaskForm({ title: '', description: '', estimatedCost: '' });
       setShowTaskModal(false);
       await loadData(); // Refresh budget
-    } catch (err: any) {
-      setTaskError(err.message || 'Failed to create task');
+    } catch (err) {
+      setTaskError(getErrorMessage(err));
     } finally {
       setTaskSubmitting(false);
     }
@@ -113,7 +93,7 @@ export function ProjectDetail() {
 
   const handleUpdateTask = async (taskId: string) => {
     try {
-      const updated = await api.patch(
+      const updated = await api.patch<Task>(
         `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`,
         {
           ...editForm,
@@ -123,8 +103,8 @@ export function ProjectDetail() {
       setTasks(tasks.map((t) => (t.id === taskId ? updated : t)));
       setEditingTask(null);
       await loadData(); // Refresh budget
-    } catch (err: any) {
-      alert(err.message || 'Failed to update task');
+    } catch (err) {
+      alert(getErrorMessage(err));
     }
   };
 
@@ -134,11 +114,11 @@ export function ProjectDetail() {
     }
 
     try {
-      await api.delete(`/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`);
+      await api.delete<void>(`/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`);
       setTasks(tasks.filter((t) => t.id !== taskId));
       await loadData(); // Refresh budget
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete task');
+    } catch (err) {
+      alert(getErrorMessage(err));
     }
   };
 
@@ -147,7 +127,7 @@ export function ProjectDetail() {
       setProjectForm({
         name: project.name,
         description: project.description || '',
-        budget: project.budget,
+        budget: project.budget.toString(),
       });
       setShowProjectModal(true);
     }
@@ -159,14 +139,14 @@ export function ProjectDetail() {
     setProjectSubmitting(true);
 
     try {
-      const updated = await api.patch(`/api/organizations/${orgId}/projects/${projectId}`, {
+      const updated = await api.patch<Project>(`/api/organizations/${orgId}/projects/${projectId}`, {
         ...projectForm,
         budget: parseFloat(projectForm.budget),
       });
       setProject(updated);
       setShowProjectModal(false);
-    } catch (err: any) {
-      setProjectError(err.message || 'Failed to update project');
+    } catch (err) {
+      setProjectError(getErrorMessage(err));
     } finally {
       setProjectSubmitting(false);
     }
@@ -174,16 +154,16 @@ export function ProjectDetail() {
 
   const handleDeleteProject = async () => {
     try {
-      await api.delete(`/api/organizations/${orgId}/projects/${projectId}`);
+      await api.delete<void>(`/api/organizations/${orgId}/projects/${projectId}`);
       navigate(`/organizations/${orgId}`);
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete project');
+    } catch (err) {
+      alert(getErrorMessage(err));
     }
   };
 
   const handleLogout = async () => {
     try {
-      await api.post('/api/auth/logout');
+      await api.post<void>('/api/auth/logout');
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -193,8 +173,8 @@ export function ProjectDetail() {
   const getStatusBadge = () => {
     if (!project) return { class: '', text: '' };
     if (project.overBudget) return { class: 'badge-over-budget', text: 'Over budget' };
-    if (parseFloat(project.remaining) === 0) return { class: 'badge-at-budget', text: 'At budget' };
-    const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+    if (project.remaining === 0) return { class: 'badge-at-budget', text: 'At budget' };
+    const percentUsed = (project.spent / project.budget) * 100;
     if (percentUsed > 80) return { class: 'badge-at-risk', text: 'At risk' };
     return { class: 'badge-on-track', text: 'On track' };
   };
@@ -213,7 +193,7 @@ export function ProjectDetail() {
 
   const isAdmin = userRole === 'admin';
   const status = getStatusBadge();
-  const percentUsed = (parseFloat(project.spent) / parseFloat(project.budget)) * 100;
+  const percentUsed = (project.spent / project.budget) * 100;
 
   return (
     <div className="app-layout">
@@ -273,18 +253,18 @@ export function ProjectDetail() {
             <div className="stats-grid" style={{ marginTop: '16px' }}>
               <div className="stat-card">
                 <div className="stat-label">Project budget · ETB</div>
-                <div className="stat-value">{parseFloat(project.budget).toLocaleString()}</div>
+                <div className="stat-value">{project.budget.toLocaleString()}</div>
                 <div className="stat-description">Total allocated budget</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Spent · ETB</div>
-                <div className="stat-value">{parseFloat(project.spent).toLocaleString()}</div>
+                <div className="stat-value">{project.spent.toLocaleString()}</div>
                 <div className="stat-description">Sum of task estimated costs</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Remaining · ETB</div>
                 <div className="stat-value primary">
-                  {parseFloat(project.remaining).toLocaleString()}
+                  {project.remaining.toLocaleString()}
                 </div>
                 <div className="stat-description">
                   {Math.max(0, Math.round(100 - percentUsed))}% available
@@ -411,7 +391,7 @@ export function ProjectDetail() {
                               </div>
                             )}
                           </td>
-                          <td>{parseFloat(task.estimatedCost).toLocaleString()}</td>
+                          <td>{task.estimatedCost.toLocaleString()}</td>
                           <td>
                             <div className="table-actions">
                               <button
@@ -420,7 +400,7 @@ export function ProjectDetail() {
                                   setEditForm({
                                     title: task.title,
                                     description: task.description || '',
-                                    estimatedCost: task.estimatedCost,
+                                    estimatedCost: task.estimatedCost.toString(),
                                   });
                                 }}
                                 className="table-action"
