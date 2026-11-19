@@ -632,7 +632,7 @@ describe('Tasks (e2e)', () => {
         .get(`/api/organizations/${testOrgId}/projects/${testProjectId}/tasks`)
         .set('Cookie', [`token=${testToken}`]);
 
-      const taskId = tasksRes.body[0].id;
+      const taskId = tasksRes.body.find((t: any) => t.title === 'Task 1').id;
 
       // Update task cost
       await request(app.getHttpServer())
@@ -657,7 +657,7 @@ describe('Tasks (e2e)', () => {
         .get(`/api/organizations/${testOrgId}/projects/${testProjectId}/tasks`)
         .set('Cookie', [`token=${testToken}`]);
 
-      const taskId = tasksRes.body[0].id;
+      const taskId = tasksRes.body.find((t: any) => t.title === 'Task 1').id;
 
       // Delete task
       await request(app.getHttpServer())
