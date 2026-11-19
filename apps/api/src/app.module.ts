@@ -8,6 +8,8 @@ import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 
 // 'ts' when running from source (dev, tests), 'js' when running compiled code (Docker)
 const ext = __filename.endsWith('.ts') ? 'ts' : 'js';
@@ -44,6 +46,8 @@ const ext = __filename.endsWith('.ts') ? 'ts' : 'js';
     UsersModule,
     OrganizationsModule,
     MembershipsModule,
+    ProjectsModule,
+    TasksModule,
     AuthModule,
     HealthModule,
   ],

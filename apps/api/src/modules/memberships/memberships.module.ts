@@ -1,13 +1,21 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from '../users/users.module';
+import { AuthModule } from '../auth/auth.module';
 import { Membership } from './entities/membership.entity';
+import { MembershipsController } from './memberships.controller';
+import { MembershipsService } from './memberships.service';
+import { OrgAccessGuard } from './guards/org-access.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Membership]),
     UsersModule,
+    AuthModule,
   ],
-  exports: [TypeOrmModule],
+  controllers: [MembershipsController],
+  providers: [MembershipsService, OrgAccessGuard, RolesGuard],
+  exports: [TypeOrmModule, MembershipsService, OrgAccessGuard, RolesGuard],
 })
 export class MembershipsModule {}

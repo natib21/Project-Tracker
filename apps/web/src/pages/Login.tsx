@@ -1,5 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api, getErrorMessage } from '../lib/api';
+import type { AuthResponse } from '../types';
 
 export function Login() {
   const navigate = useNavigate();
@@ -16,60 +18,69 @@ export function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Login failed');
-      }
-
-      navigate('/');
+      await api.post<AuthResponse>('/api/auth/login', formData);
+      navigate('/organizations');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <h1>Login</h1>
-      {error && <div className="error">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="email">Email</label>
-          <input
-            type="email"
-            id="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            required
-          />
+    <div className="auth-page">
+      <div className="auth-brand">
+        <h1>DAPS</h1>
+        <div className="subtitle">PROJECT TRACKER</div>
+      </div>
+
+      <div className="auth-container">
+        <div className="auth-header">WORKSPACE ACCESS</div>
+        <h2>Welcome back</h2>
+        <div className="auth-subtitle">Sign in to your DAPS workspace.</div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email">Email address</label>
+            <input
+              type="email"
+              id="email"
+              placeholder="sara@daps.tech"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              placeholder="••••••••••••"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
+            />
+            <div className="form-hint">Keep your account secure.</div>
+          </div>
+
+          <button type="submit" className="btn" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          <div className="auth-footer-text">No account yet?</div>
+          <Link to="/register" className="auth-footer-link">
+            Create an account
+          </Link>
         </div>
-        <div className="form-group">
-          <label htmlFor="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            required
-          />
-        </div>
-        <button type="submit" className="btn" disabled={loading}>
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
-      <Link to="/register" className="link">
-        Don't have an account? Register
-      </Link>
+      </div>
+
+      <div className="auth-page-footer">© 2026 DAPS · Secure workspace access</div>
     </div>
   );
 }
