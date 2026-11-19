@@ -6,9 +6,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev:api": "npm run dev --workspace=apps/api",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
+    "dev:api": "node init && npm run dev --workspace=apps/api",
+    "dev:web": "node init && npm run dev --workspace=apps/web",
+    "build": "node init && npm run build --workspace=apps/web && npm run build --workspace=apps/api",
     "test": "npm run test --workspace=apps/api",
     "test:e2e": "npm run test:e2e --workspace=apps/api",
     "lint": "npm run lint --workspaces --if-present",
