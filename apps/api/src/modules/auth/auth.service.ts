@@ -28,7 +28,6 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     const password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-     console.log(dto,password)
     try {
       const user = await this.userRepository.save(
         this.userRepository.create({

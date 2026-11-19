@@ -27,7 +27,6 @@ export class OrganizationsController {
   @Get()
   findAll(@Req() req: Request) {
     const userId = req['user'].sub;
-    console.log(req)
     return this.organizationsService.findAllForUser(userId);
   }
 

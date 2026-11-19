@@ -63,6 +63,26 @@ export class TasksService {
     });
   }
 
+  async findOne(
+    orgId: string,
+    projectId: string,
+    taskId: string,
+  ): Promise<Task> {
+    const task = await this.taskRepository.findOne({
+      where: {
+        id: taskId,
+        projectId,
+        organizationId: orgId,
+      },
+    });
+
+    if (!task) {
+      throw new NotFoundException();
+    }
+
+    return task;
+  }
+
   async update(
     orgId: string,
     projectId: string,

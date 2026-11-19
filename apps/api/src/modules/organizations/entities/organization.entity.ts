@@ -22,7 +22,7 @@ export class Organization {
   @OneToMany(() => Membership, (membership) => membership.organization)
   memberships: Membership[];
 
-  @OneToMany('Project', 'organizationId')
+  @OneToMany('Project', 'organization')
   projects: any[];
 
   @CreateDateColumn()

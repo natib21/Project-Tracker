@@ -39,6 +39,15 @@ export class TasksController {
     return this.tasksService.findAll(orgId, projectId);
   }
 
+  @Get(':taskId')
+  findOne(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+  ) {
+    return this.tasksService.findOne(orgId, projectId, taskId);
+  }
+
   @Patch(':taskId')
   update(
     @Param('orgId', ParseUUIDPipe) orgId: string,
