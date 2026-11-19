@@ -32,33 +32,35 @@ export class OrganizationsService {
     });
   }
 
-  async findAllForUser(userId: string): Promise<any[]> {
-    const result = await this.organizationRepository
-      .createQueryBuilder('organization')
-      .innerJoin(
-        'organization.memberships',
-        'membership',
-        'membership.userId = :userId',
-        { userId },
-      )
-      .leftJoin('organization.memberships', 'allMemberships')
-      .leftJoin('organization.projects', 'projects')
-      .addSelect('membership.role', 'role')
-      .addSelect('COUNT(DISTINCT allMemberships.id)', 'memberCount')
-      .addSelect('COUNT(DISTINCT projects.id)', 'projectCount')
-      .groupBy('organization.id')
-      .addGroupBy('membership.role')
-      .getRawAndEntities();
+async findAllForUser(userId: string) {
+  const membershipRepo = this.dataSource.getRepository(Membership);
 
-    return result.entities.map((org, index) => ({
-      ...org,
-      role: result.raw[index].role,
-      _count: {
-        memberships: parseInt(result.raw[index].memberCount) || 0,
-        projects: parseInt(result.raw[index].projectCount) || 0,
-      },
-    }));
-  }
+  // Only the organizations this user belongs to (the isolation rule)
+  const memberships = await membershipRepo.find({
+    where: { userId },
+    relations: { organization: true },
+  });
+  if (memberships.length === 0) return [];
+
+  const orgIds = memberships.map((m) => m.organizationId);
+  const counts = await membershipRepo
+    .createQueryBuilder('m')
+    .select('m."organizationId"', 'organizationId')
+    .addSelect('COUNT(*)', 'count')
+    .where('m."organizationId" IN (:...orgIds)', { orgIds })
+    .groupBy('m."organizationId"')
+    .getRawMany();
+
+  const countByOrg = new Map(counts.map((c) => [c.organizationId, Number(c.count)]));
+
+  return memberships.map((m) => ({
+    id: m.organization.id,
+    name: m.organization.name,
+    description: m.organization.description,
+    role: m.role,
+    memberCount: countByOrg.get(m.organizationId) ?? 0,
+  }));
+}
 
   async findOne(orgId: string): Promise<Organization> {
     const organization = await this.organizationRepository.findOne({

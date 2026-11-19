@@ -232,7 +232,7 @@ export function OrganizationDetail() {
           </div>
 
           {/* Projects Section */}
-          <div className="card">
+          <div className="card" id="projects">
             <div className="card-header">
               <div>
                 <div className="card-title">Projects</div>
@@ -306,7 +306,7 @@ export function OrganizationDetail() {
           </div>
 
           {/* Members Section */}
-          <div className="card">
+          <div className="card" id="members">
             <div className="card-header">
               <div>
                 <div className="card-title">Members</div>

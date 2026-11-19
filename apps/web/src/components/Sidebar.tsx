@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   organizationId: string;
@@ -7,15 +7,29 @@ interface SidebarProps {
 
 export function Sidebar({ organizationId, organizationName }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path: string) => {
     if (path === 'overview') {
-      return location.pathname === `/organizations/${organizationId}`;
+      return location.pathname === `/organizations/${organizationId}` && !location.hash;
     }
     if (path === 'projects') {
-      return location.pathname.includes(`/organizations/${organizationId}/projects`);
+      return location.hash === '#projects';
+    }
+    if (path === 'members') {
+      return location.hash === '#members';
     }
     return false;
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    navigate(`/organizations/${organizationId}#${sectionId}`);
+    setTimeout(() => {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   return (
@@ -42,12 +56,26 @@ export function Sidebar({ organizationId, organizationName }: SidebarProps) {
         >
           Overview
         </Link>
-        <div className="sidebar-item" style={{ color: 'var(--color-text-tertiary)', cursor: 'default' }}>
+        <a
+          onClick={(e) => {
+            e.preventDefault();
+            scrollToSection('projects');
+          }}
+          className={`sidebar-item ${isActive('projects') ? 'active' : ''}`}
+          style={{ cursor: 'pointer' }}
+        >
           Projects
-        </div>
-        <div className="sidebar-item" style={{ color: 'var(--color-text-tertiary)', cursor: 'default' }}>
+        </a>
+        <a
+          onClick={(e) => {
+            e.preventDefault();
+            scrollToSection('members');
+          }}
+          className={`sidebar-item ${isActive('members') ? 'active' : ''}`}
+          style={{ cursor: 'pointer' }}
+        >
           Members
-        </div>
+        </a>
       </div>
 
       <div className="sidebar-footer">
