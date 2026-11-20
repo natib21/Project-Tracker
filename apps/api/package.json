@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
-    "build": "nest build",
-    "start": "node dist/src/main.js",
+    "dev": "node init && nest start --watch",
+    "build": "node init && nest build",
+    "start": "node init && node dist/src/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
