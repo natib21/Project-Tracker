@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, Max, IsIn } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateTaskDto {
@@ -16,4 +16,8 @@ export class UpdateTaskDto {
   @Transform(({ value }) => (value !== undefined ? parseFloat(value) : value))
   @IsOptional()
   estimatedCost?: number;
+
+  @IsOptional()
+  @IsIn(['low', 'medium', 'high'])
+  priority?: 'low' | 'medium' | 'high';
 }

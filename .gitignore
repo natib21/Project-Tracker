@@ -5,9 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env
-.env.local
-.env.*.local
+!.env.example
 
 # Build output
 dist/
@@ -15,7 +13,6 @@ build/
 *.tsbuildinfo
 
 # IDEs
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -31,3 +28,4 @@ coverage/
 # Logs
 logs/
 *.log
+config.bat

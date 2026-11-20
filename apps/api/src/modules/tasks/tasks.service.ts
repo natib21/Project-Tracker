@@ -34,6 +34,7 @@ export class TasksService {
 
     const task = this.taskRepository.create({
       ...createTaskDto,
+      priority: createTaskDto.priority || 'medium',
       projectId,
       organizationId: orgId,
     });
@@ -41,13 +42,14 @@ export class TasksService {
     return this.taskRepository.save(task);
   }
 
-  async findAll(orgId: string, projectId: string): Promise<Task[]> {
+  async findAll(
+    orgId: string,
+    projectId: string,
+    priority?: 'low' | 'medium' | 'high',
+  ): Promise<Task[]> {
     // Verify project exists in this org
     const project = await this.projectRepository.findOne({
-      where: {
-        id: projectId,
-        organizationId: orgId,
-      },
+      where: { id: projectId, organizationId: orgId },
     });
 
     if (!project) {
@@ -58,6 +60,7 @@ export class TasksService {
       where: {
         projectId,
         organizationId: orgId,
+        ...(priority ? { priority } : {}),
       },
       order: { createdAt: 'DESC' },
     });

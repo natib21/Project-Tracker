@@ -43,11 +43,14 @@ export interface Project {
   overBudget: boolean;
 }
 
+export type TaskPriority = 'low' | 'medium' | 'high';
+
 export interface Task {
   id: string;
   title: string;
   description?: string;
   estimatedCost: number;
+  priority?: TaskPriority;
 }
 
 export interface AuthResponse {

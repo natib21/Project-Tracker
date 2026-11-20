@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   ParseUUIDPipe,
   HttpCode,
@@ -16,6 +17,7 @@ import { OrgAccessGuard } from '../memberships/guards/org-access.guard';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 
 @Controller('organizations/:orgId/projects/:projectId/tasks')
 @UseGuards(AuthGuard, OrgAccessGuard)
@@ -35,8 +37,9 @@ export class TasksController {
   findAll(
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: ListTasksQueryDto,
   ) {
-    return this.tasksService.findAll(orgId, projectId);
+    return this.tasksService.findAll(orgId, projectId, query.priority);
   }
 
   @Get(':taskId')
