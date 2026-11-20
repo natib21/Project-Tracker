@@ -1,40 +1,38 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { TopBar } from '../components/TopBar';
 
 export function Forbidden() {
-  return (
-    <div className="app-layout">
-      <div className="main-content">
-        <div className="top-nav">
-          <div className="breadcrumb">
-            <Link to="/organizations">Organizations</Link>
-          </div>
-          <div className="user-menu">
-            <Link to="/organizations" className="btn-logout">
-              Help & support
-            </Link>
-            <Link to="/login" className="btn-logout">
-              Log out
-            </Link>
-          </div>
-        </div>
+  const navigate = useNavigate();
 
+  return (
+    <div className="standalone-layout">
+      <TopBar />
+
+      <main className="standalone-main">
         <div className="error-page">
-          <div className="error-code">403 / ACCESS RESTRICTED</div>
-          <h1>This space is restricted</h1>
-          <p>
-            You don't have access to this organization or project. Ask your organization admin to
-            invite you.
-          </p>
-          <div className="error-actions">
-            <Link to="/organizations" className="btn">
-              Back to organizations
-            </Link>
-            <button onClick={() => window.history.back()} className="btn btn-secondary">
-              Go back
-            </button>
+          <div className="error-card">
+            <div className="error-code">403 / ACCESS RESTRICTED</div>
+            <h1>This space is restricted</h1>
+            <p>
+              You don&apos;t have access to this organization or project.
+              <br />
+              Ask your organization admin to invite you.
+            </p>
+            <div className="error-actions">
+              <Link to="/organizations" className="btn btn-small">
+                Back to organizations
+              </Link>
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="btn btn-secondary btn-small"
+              >
+                Go back
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

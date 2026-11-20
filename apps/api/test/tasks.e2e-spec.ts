@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
+import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 
 describe('Tasks (e2e)', () => {
@@ -770,6 +771,233 @@ describe('Tasks (e2e)', () => {
 
       // Note: We can't verify tasks are gone via API since the project endpoint
       // returns 404, but the CASCADE DELETE constraint ensures they're removed
+    });
+  });
+
+  describe('Task priority', () => {
+    let priorityProjectId: string;
+    let defaultTaskId: string;
+    let highTaskId: string;
+    let lowTaskId: string;
+
+    const tasksUrl = () =>
+      `/api/organizations/${orgAId}/projects/${priorityProjectId}/tasks`;
+
+    beforeAll(async () => {
+      // A separate project, so the counts below do not depend on other tests
+      const projectRes = await request(app.getHttpServer())
+        .post(`/api/organizations/${orgAId}/projects`)
+        .set('Cookie', [`token=${adminToken}`])
+        .send({
+          name: 'Priority Project',
+          budget: 10000.00,
+        });
+      priorityProjectId = projectRes.body.id;
+    });
+
+    it('should default to medium when priority is not sent', async () => {
+      const res = await request(app.getHttpServer())
+        .post(tasksUrl())
+        .set('Cookie', [`token=${memberToken}`])
+        .send({
+          title: 'No priority given',
+          estimatedCost: 100,
+        })
+        .expect(201);
+
+      expect(res.body.priority).toBe('medium');
+      defaultTaskId = res.body.id;
+    });
+
+    it('should give medium to a row written without a priority (what the migration does to existing tasks)', async () => {
+      // Insert the way a task existed before the migration: no priority value at all.
+      const dataSource = app.get(DataSource);
+      const rows = await dataSource.query(
+        `INSERT INTO "tasks" ("projectId", "organizationId", "title", "estimatedCost")
+         VALUES ($1, $2, $3, $4) RETURNING "id", "priority"`,
+        [priorityProjectId, orgAId, 'Task from before the migration', 50],
+      );
+
+      expect(rows[0].priority).toBe('medium');
+
+      const res = await request(app.getHttpServer())
+        .get(`${tasksUrl()}/${rows[0].id}`)
+        .set('Cookie', [`token=${adminToken}`])
+        .expect(200);
+
+      expect(res.body.priority).toBe('medium');
+    });
+
+    it('should refuse a value outside low/medium/high at the database level', async () => {
+      const dataSource = app.get(DataSource);
+
+      await expect(
+        dataSource.query(
+          `INSERT INTO "tasks" ("projectId", "organizationId", "title", "estimatedCost", "priority")
+           VALUES ($1, $2, $3, $4, $5)`,
+          [priorityProjectId, orgAId, 'Bad priority', 50, 'urgent'],
+        ),
+      ).rejects.toThrow(/CHK_tasks_priority/);
+    });
+
+    it('should create tasks with an explicit priority', async () => {
+      const highRes = await request(app.getHttpServer())
+        .post(tasksUrl())
+        .set('Cookie', [`token=${adminToken}`])
+        .send({
+          title: 'High priority task',
+          estimatedCost: 200,
+          priority: 'high',
+        })
+        .expect(201);
+
+      expect(highRes.body.priority).toBe('high');
+      highTaskId = highRes.body.id;
+
+      const lowRes = await request(app.getHttpServer())
+        .post(tasksUrl())
+        .set('Cookie', [`token=${adminToken}`])
+        .send({
+          title: 'Low priority task',
+          estimatedCost: 300,
+          priority: 'low',
+        })
+        .expect(201);
+
+      expect(lowRes.body.priority).toBe('low');
+      lowTaskId = lowRes.body.id;
+    });
+
+    it('should reject an unknown priority on create', async () => {
+      await request(app.getHttpServer())
+        .post(tasksUrl())
+        .set('Cookie', [`token=${adminToken}`])
+        .send({
+          title: 'Urgent task',
+          estimatedCost: 100,
+          priority: 'urgent',
+        })
+        .expect(400);
+    });
+
+    it('should return every task when no filter is sent', async () => {
+      const res = await request(app.getHttpServer())
+        .get(tasksUrl())
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(200);
+
+      expect(res.body).toHaveLength(4);
+      for (const task of res.body) {
+        expect(['low', 'medium', 'high']).toContain(task.priority);
+      }
+    });
+
+    it('should return only high tasks for ?priority=high', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=high`)
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(200);
+
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].id).toBe(highTaskId);
+      expect(res.body[0].priority).toBe('high');
+    });
+
+    it('should return only low tasks for ?priority=low', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=low`)
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(200);
+
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].id).toBe(lowTaskId);
+    });
+
+    it('should return the default tasks for ?priority=medium', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=medium`)
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(200);
+
+      expect(res.body).toHaveLength(2);
+      expect(res.body.map((t: { id: string }) => t.id)).toContain(defaultTaskId);
+      for (const task of res.body) {
+        expect(task.priority).toBe('medium');
+      }
+    });
+
+    it('should reject an unknown priority filter', async () => {
+      await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=urgent`)
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(400);
+    });
+
+    it('should change priority on update and keep the other fields', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`${tasksUrl()}/${defaultTaskId}`)
+        .set('Cookie', [`token=${memberToken}`])
+        .send({
+          priority: 'high',
+        })
+        .expect(200);
+
+      expect(res.body.priority).toBe('high');
+      expect(res.body.title).toBe('No priority given');
+      expect(parseFloat(res.body.estimatedCost)).toBe(100);
+
+      const highRes = await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=high`)
+        .set('Cookie', [`token=${memberToken}`])
+        .expect(200);
+
+      expect(highRes.body).toHaveLength(2);
+    });
+
+    it('should keep the priority when an update does not send it', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`${tasksUrl()}/${highTaskId}`)
+        .set('Cookie', [`token=${memberToken}`])
+        .send({
+          title: 'High priority task (renamed)',
+        })
+        .expect(200);
+
+      expect(res.body.priority).toBe('high');
+    });
+
+    it('should reject an unknown priority on update', async () => {
+      await request(app.getHttpServer())
+        .patch(`${tasksUrl()}/${highTaskId}`)
+        .set('Cookie', [`token=${memberToken}`])
+        .send({
+          priority: 'urgent',
+        })
+        .expect(400);
+    });
+
+    it('should return 404 when a non-member uses the priority filter', async () => {
+      await request(app.getHttpServer())
+        .get(`${tasksUrl()}?priority=high`)
+        .set('Cookie', [`token=${nonMemberToken}`])
+        .expect(404);
+    });
+
+    it('should return 404 when the priority filter is used via another org path (guessable-id test)', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/organizations/${orgBId}/projects/${priorityProjectId}/tasks?priority=high`)
+        .set('Cookie', [`token=${nonMemberToken}`])
+        .expect(404);
+    });
+
+    it('should return 404 when a non-member tries to change priority', async () => {
+      await request(app.getHttpServer())
+        .patch(`${tasksUrl()}/${highTaskId}`)
+        .set('Cookie', [`token=${nonMemberToken}`])
+        .send({
+          priority: 'low',
+        })
+        .expect(404);
     });
   });
 });

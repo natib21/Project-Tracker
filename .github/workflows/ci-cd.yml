@@ -55,6 +55,11 @@ jobs:
       - name: Run migrations
         run: npm run migration:run
 
+      # Proves the newest migration is reversible: undo it, then apply it again.
+      # If "down" is broken, the pipeline fails here and nothing is deployed.
+      - name: Check the latest migration can be rolled back
+        run: npm run migration:revert && npm run migration:run
+
       - name: Run e2e tests
         run: npm run test:e2e --workspace=apps/api
 
