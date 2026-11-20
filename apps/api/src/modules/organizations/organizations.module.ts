@@ -5,11 +5,13 @@ import { Membership } from '../memberships/entities/membership.entity';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
 import { AuthModule } from '../auth/auth.module';
+import { MembershipsModule } from '../memberships/memberships.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Organization, Membership]),
     AuthModule,
+    MembershipsModule,
   ],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],

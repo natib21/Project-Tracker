@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
+import { OrgAccessGuard } from '../memberships/guards/org-access.guard';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 
@@ -30,7 +31,10 @@ export class OrganizationsController {
     return this.organizationsService.findAllForUser(userId);
   }
 
+  // Only members may read an organization. A non-member gets the same 404
+  // as for an id that does not exist, so ids cannot be probed.
   @Get(':orgId')
+  @UseGuards(OrgAccessGuard)
   findOne(@Param('orgId', ParseUUIDPipe) orgId: string) {
     return this.organizationsService.findOne(orgId);
   }

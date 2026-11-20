@@ -152,11 +152,43 @@ describe('Organizations (e2e)', () => {
       expect(res.body.name).toBe('Organization A');
     });
 
+    it('should return 404 when user is not a member (user B reading org A)', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/organizations/${orgAId}`)
+        .set('Cookie', [`token=${userBToken}`])
+        .expect(404);
+
+      // Nothing about the other organization may leak in the error body
+      expect(JSON.stringify(res.body)).not.toContain('Organization A');
+    });
+
+    it('should give a non-member the same answer as for an organization that does not exist', async () => {
+      const missingOrgId = '00000000-0000-4000-8000-000000000000';
+
+      const forbidden = await request(app.getHttpServer())
+        .get(`/api/organizations/${orgAId}`)
+        .set('Cookie', [`token=${userBToken}`])
+        .expect(404);
+
+      const missing = await request(app.getHttpServer())
+        .get(`/api/organizations/${missingOrgId}`)
+        .set('Cookie', [`token=${userBToken}`])
+        .expect(404);
+
+      expect(forbidden.body).toEqual(missing.body);
+    });
+
+    it('should return 401 without a session', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/organizations/${orgAId}`)
+        .expect(401);
+    });
+
     it('should reject invalid UUID', async () => {
       await request(app.getHttpServer())
         .get('/api/organizations/invalid-id')
         .set('Cookie', [`token=${userAToken}`])
-        .expect(400);
+        .expect(404);
     });
   });
 
