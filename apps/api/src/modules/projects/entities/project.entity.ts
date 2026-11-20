@@ -7,19 +7,26 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
+  Check,
 } from 'typeorm';
 import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('projects')
+@Index('IDX_projects_organizationId', ['organizationId'])
+@Check('CHK_projects_budget', '"budget" >= 0')
 export class Project {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   organizationId: string;
 
   @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'organizationId' })
+  @JoinColumn({
+    name: 'organizationId',
+    foreignKeyConstraintName: 'FK_projects_organizationId',
+  })
   organization: Organization;
 
   @Column()
