@@ -1,0 +1,8 @@
+name: Output
+on: workflow-dispach
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      name: runnning the outputs
+      run: echo "${{toJSON(github)}}"
